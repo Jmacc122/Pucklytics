@@ -1,55 +1,164 @@
+import { useState, useEffect, useRef } from 'react'
 import LiveGameCard from '../components/LiveGameCard'
 
-const liveGames = [
-  {
-    home: 'Calgary', homeSog: 28, homeScore: 3, homePulled: false,
-    away: 'Edmonton', awaySog: 22, awayScore: 2, awayPulled: true,
-    period: '3rd', time: '4:22', timeRemaining: 262,
-    pp: 'CGY', en: true,
-    pullRisk: 82, pullRiskTeam: 'EDM',
-    tiltAngle: -9, tiltSide: 'home', tiltStrength: 40, tiltColor: 'blue',
-    homeHighlight: true
-  },
-  {
-    home: 'Dallas', homeSog: 9, homeScore: 1, homePulled: false,
-    away: 'Colorado', awaySog: 7, awayScore: 1, awayPulled: false,
-    period: '1st', time: '8:14', timeRemaining: 3494,
-    pp: 'DAL', en: false,
-    pullRisk: null,
-    tiltAngle: -5, tiltSide: 'home', tiltStrength: 25, tiltColor: 'blue',
-    homeHighlight: true
-  },
-  {
-    home: 'Boston', homeSog: 16, homeScore: 1, homePulled: false,
-    away: 'Tampa Bay', awaySog: 19, awayScore: 1, awayPulled: false,
-    period: '2nd', time: '11:04', timeRemaining: 1864,
-    pp: null, en: false,
-    pullRisk: 10, pullRiskLevel: 'low',
-    tiltAngle: 4, tiltSide: 'away', tiltStrength: 20, tiltColor: 'red',
-    awayHighlight: true
-  }
-]
-
-const upcomingGames = [
-  { home: 'Vancouver', away: 'Vegas', time: '9:00 PM MT', model: 'VAN 54%', edge: '+5%' },
-  { home: 'Seattle', away: 'San Jose', time: '9:30 PM MT', model: 'SEA 61%', edge: null }
-]
-
-const finalGames = [
-  { home: 'Toronto', homeSog: 34, homeScore: 4, away: 'Montreal', awaySog: 29, awayScore: 2, totalShots: 63, enGoals: 1 }
-]
+const BASE = 'https://pucklytics-backend.onrender.com'
 
 const dates = [
   { day: 'Wed', num: 'Apr 22' },
   { day: 'Thu', num: 'Apr 23' },
-  { day: 'Today', num: 'Apr 24', active: true },
-  { day: 'Sat', num: 'Apr 26' },
+  { day: 'Fri', num: 'Apr 24' },
+  { day: 'Today', num: 'Apr 25', active: true },
   { day: 'Sun', num: 'Apr 27' },
   { day: 'Mon', num: 'Apr 28' }
 ]
 
+function periodLabel(p) {
+  if (p === 1) return '1st'
+  if (p === 2) return '2nd'
+  if (p === 3) return '3rd'
+  if (p === 4) return 'OT'
+  if (p >= 5) return 'SO'
+  return '—'
+}
+
+function mapGameState(state) {
+  if (state === 'LIVE' || state === 'CRIT') return 'live'
+  if (state === 'OFF' || state === 'FINAL') return 'final'
+  return 'upcoming'
+}
+
+// Total seconds of real game time remaining — used for sort (lower = more urgent)
+function totalSecsRemaining(period, timeStr) {
+  if (!timeStr) return 9999
+  const [m, s] = timeStr.split(':').map(Number)
+  const periodSecs = (m || 0) * 60 + (s || 0)
+  const periodsLeft = Math.max(0, 3 - (period || 1))
+  return periodSecs + periodsLeft * 1200
+}
+
+function mapTilt(tilt) {
+  const raw = tilt?.net_tilt ?? 0
+  const net = Math.abs(raw) > 1 ? raw / 100 : raw  // normalise if backend sends 0-100
+  const abs = Math.abs(net)
+  const side = net >= 0 ? 'home' : 'away'
+  return {
+    tiltSide: side,
+    tiltAngle: net >= 0 ? -Math.min(Math.round(abs * 20), 12) : Math.min(Math.round(abs * 20), 12),
+    tiltStrength: Math.min(Math.round(abs * 65), 65),
+    tiltColor: side === 'home' ? 'blue' : 'red',
+  }
+}
+
+function mapLiveGame(g, tilt) {
+  const homeLeading = g.home_score > g.away_score
+  return {
+    game_id: g.game_id,
+    home: g.home_team,
+    homeSog: null,
+    homeScore: g.home_score,
+    homePulled: false,
+    homeHighlight: homeLeading,
+    away: g.away_team,
+    awaySog: null,
+    awayScore: g.away_score,
+    awayPulled: false,
+    awayHighlight: !homeLeading && g.away_score > g.home_score,
+    period: periodLabel(g.period),
+    time: g.time_remaining ?? '—',
+    timeRemaining: totalSecsRemaining(g.period, g.time_remaining),
+    pp: null,
+    en: g.empty_net ?? false,
+    pullRisk: null,
+    pullRiskTeam: null,
+    ...mapTilt(tilt),
+  }
+}
+
+function mapUpcomingGame(g) {
+  return {
+    game_id: g.game_id,
+    home: g.home_team,
+    away: g.away_team,
+    time: '—',
+    model: '—',
+    edge: null,
+  }
+}
+
+function mapFinalGame(g) {
+  return {
+    game_id: g.game_id,
+    home: g.home_team,
+    homeSog: null,
+    homeScore: g.home_score,
+    away: g.away_team,
+    awaySog: null,
+    awayScore: g.away_score,
+    totalShots: null,
+    enGoals: null,
+  }
+}
+
 export default function LivePage({ onNav }) {
-  const sortedLive = [...liveGames].sort((a, b) => a.timeRemaining - b.timeRemaining)
+  const [liveGames, setLiveGames] = useState([])
+  const [upcomingGames, setUpcomingGames] = useState([])
+  const [finalGames, setFinalGames] = useState([])
+  const [loading, setLoading] = useState(true)
+  const controllerRef = useRef(null)
+
+  useEffect(() => {
+    let active = true
+
+    async function load() {
+      if (controllerRef.current) controllerRef.current.abort()
+      controllerRef.current = new AbortController()
+      const { signal } = controllerRef.current
+      const timeoutId = setTimeout(() => controllerRef.current?.abort(), 15000)
+
+      try {
+        const res = await fetch(`${BASE}/games/today`, { signal })
+        const all = await res.json()
+        if (!Array.isArray(all)) return
+
+        const liveRaw = all.filter(g => mapGameState(g.game_state) === 'live')
+        const upcomingRaw = all.filter(g => mapGameState(g.game_state) === 'upcoming')
+        const finalRaw = all.filter(g => mapGameState(g.game_state) === 'final')
+
+        // Fetch tilt for each live game in parallel; failures yield null
+        const tiltResults = await Promise.allSettled(
+          liveRaw.map(g =>
+            fetch(`${BASE}/games/${g.game_id}/tilt`, { signal }).then(r => r.json())
+          )
+        )
+
+        if (!active || signal.aborted) return
+
+        const mapped = liveRaw
+          .map((g, i) => {
+            const tilt = tiltResults[i].status === 'fulfilled' ? tiltResults[i].value : null
+            return mapLiveGame(g, tilt)
+          })
+          .sort((a, b) => a.timeRemaining - b.timeRemaining)
+
+        setLiveGames(mapped)
+        setUpcomingGames(upcomingRaw.map(mapUpcomingGame))
+        setFinalGames(finalRaw.map(mapFinalGame))
+      } catch (_) {
+        // network error or abort — keep existing state on re-polls, stay empty on first load
+      } finally {
+        clearTimeout(timeoutId)
+      }
+    }
+
+    load().finally(() => { if (active) setLoading(false) })
+    const pollId = setInterval(load, 10000)
+
+    return () => {
+      active = false
+      clearInterval(pollId)
+      controllerRef.current?.abort()
+    }
+  }, [])
 
   return (
     <div className="page">
@@ -64,7 +173,10 @@ export default function LivePage({ onNav }) {
           <button className="nl">Teams</button>
           <button className="nl">History</button>
         </div>
-        <div className="live-pill"><div className="live-dot"></div>{sortedLive.length} live now</div>
+        <div className="live-pill">
+          <div className="live-dot"></div>
+          {loading ? 'Loading…' : `${liveGames.length} live now`}
+        </div>
       </nav>
 
       <div className="hero">
@@ -86,83 +198,101 @@ export default function LivePage({ onNav }) {
 
         <div>
           <div className="section-label">Live now · sorted by time remaining</div>
-          <div className="row3">
-            {sortedLive.map((g, i) => <LiveGameCard key={i} game={g} onClick={() => onNav('livedeep')} />)}
-          </div>
+          {loading ? (
+            <div className="loading-card">Connecting to live data…</div>
+          ) : liveGames.length === 0 ? (
+            <div className="empty-card">No games live right now</div>
+          ) : (
+            <div className="row3">
+              {liveGames.map(g => (
+                <LiveGameCard key={g.game_id} game={g} onClick={() => onNav('livedeep')} />
+              ))}
+            </div>
+          )}
         </div>
 
         <div>
           <div className="section-label">Upcoming</div>
-          <div className="row3">
-            {upcomingGames.map((g, i) => (
-              <div key={i} className="lcard">
-                <div className="lc-top">
-                  <span className="badge bl">{g.time}</span>
-                  <span style={{ fontSize: 11, color: '#9CA3AF' }}>Goalies TBC</span>
-                </div>
-                <div className="lc-team">
-                  <div><div className="lc-tname">{g.home}</div></div>
-                  <div className="lc-tscore dim">—</div>
-                </div>
-                <div className="lc-divider"></div>
-                <div className="lc-team">
-                  <div><div className="lc-tname">{g.away}</div></div>
-                  <div className="lc-tscore dim">—</div>
-                </div>
-                <div className="lc-foot">
-                  <div>
-                    <div className="lc-lbl">Model</div>
-                    <div className="lc-val">{g.model}</div>
+          {upcomingGames.length === 0 && !loading ? (
+            <div className="empty-card">No more games scheduled today</div>
+          ) : (
+            <div className="row3">
+              {upcomingGames.map(g => (
+                <div key={g.game_id} className="lcard">
+                  <div className="lc-top">
+                    <span className="badge bl">{g.time}</span>
+                    <span style={{ fontSize: 11, color: '#9CA3AF' }}>Goalies TBC</span>
                   </div>
-                  <div>
-                    <div className="lc-lbl">Edge</div>
-                    <div className={`lc-val ${g.edge ? 'green' : ''}`} style={!g.edge ? { color: '#9CA3AF' } : {}}>
-                      {g.edge || '—'}
+                  <div className="lc-team">
+                    <div><div className="lc-tname">{g.home}</div></div>
+                    <div className="lc-tscore dim">—</div>
+                  </div>
+                  <div className="lc-divider"></div>
+                  <div className="lc-team">
+                    <div><div className="lc-tname">{g.away}</div></div>
+                    <div className="lc-tscore dim">—</div>
+                  </div>
+                  <div className="lc-foot">
+                    <div>
+                      <div className="lc-lbl">Model</div>
+                      <div className="lc-val" style={{ color: '#9CA3AF' }}>{g.model}</div>
+                    </div>
+                    <div>
+                      <div className="lc-lbl">Edge</div>
+                      <div className="lc-val" style={{ color: '#9CA3AF' }}>—</div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
-            <div className="empty-card">No more games scheduled today</div>
-          </div>
+              ))}
+              {!loading && <div className="empty-card">No more games scheduled today</div>}
+            </div>
+          )}
         </div>
 
         <div>
           <div className="section-label">Final</div>
-          <div className="row3">
-            {finalGames.map((g, i) => (
-              <div key={i} className="lcard">
-                <div className="lc-top">
-                  <span className="badge bf">Final</span>
-                </div>
-                <div className="lc-team">
-                  <div>
-                    <div className="lc-tname">{g.home}</div>
-                    <div className="lc-tsog"><strong>{g.homeSog}</strong> SOG</div>
+          {finalGames.length === 0 && !loading ? (
+            <div className="empty-card">No final games yet today</div>
+          ) : (
+            <div className="row3">
+              {finalGames.map(g => (
+                <div key={g.game_id} className="lcard">
+                  <div className="lc-top">
+                    <span className="badge bf">Final</span>
                   </div>
-                  <div className="lc-tscore">{g.homeScore}</div>
-                </div>
-                <div className="lc-divider"></div>
-                <div className="lc-team">
-                  <div>
-                    <div className="lc-tname">{g.away}</div>
-                    <div className="lc-tsog"><strong>{g.awaySog}</strong> SOG</div>
+                  <div className="lc-team">
+                    <div>
+                      <div className="lc-tname">{g.home}</div>
+                      {g.homeSog !== null && <div className="lc-tsog"><strong>{g.homeSog}</strong> SOG</div>}
+                    </div>
+                    <div className={`lc-tscore ${g.homeScore > g.awayScore ? '' : 'dim'}`}>{g.homeScore}</div>
                   </div>
-                  <div className="lc-tscore dim">{g.awayScore}</div>
-                </div>
-                <div className="lc-foot">
-                  <div>
-                    <div className="lc-lbl">Total shots</div>
-                    <div className="lc-val">{g.totalShots}</div>
+                  <div className="lc-divider"></div>
+                  <div className="lc-team">
+                    <div>
+                      <div className="lc-tname">{g.away}</div>
+                      {g.awaySog !== null && <div className="lc-tsog"><strong>{g.awaySog}</strong> SOG</div>}
+                    </div>
+                    <div className={`lc-tscore ${g.awayScore > g.homeScore ? '' : 'dim'}`}>{g.awayScore}</div>
                   </div>
-                  <div>
-                    <div className="lc-lbl">EN goals</div>
-                    <div className="lc-val">{g.enGoals}</div>
+                  <div className="lc-foot">
+                    <div>
+                      <div className="lc-lbl">Total shots</div>
+                      <div className="lc-val" style={g.totalShots === null ? { color: '#9CA3AF' } : {}}>
+                        {g.totalShots ?? '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="lc-lbl">EN goals</div>
+                      <div className="lc-val" style={g.enGoals === null ? { color: '#9CA3AF' } : {}}>
+                        {g.enGoals ?? '—'}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
       </div>

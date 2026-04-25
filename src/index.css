@@ -201,6 +201,8 @@ body { background: #F7F8FA; font-family: system-ui, sans-serif; }
 
 .empty-card { background: #fff; border: 1px dashed #E8EBF0; border-radius: 12px; padding: 18px; display: flex; align-items: center; justify-content: center; color: #9CA3AF; font-size: 13px; min-height: 200px; }
 
+.loading-card { background: #fff; border: 1px solid #E8EBF0; border-radius: 12px; padding: 18px; display: flex; align-items: center; justify-content: center; color: #9CA3AF; font-size: 13px; min-height: 120px; }
+
 .bl { background: #DBEAFE; color: #1D4ED8; }
 
 /* ── Live Deep Dive Page ───────────────────────────────────── */

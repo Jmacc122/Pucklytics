@@ -1,31 +1,63 @@
+import { useState, useEffect } from 'react'
 import GameCard from '../components/GameCard'
 import InsightCard from '../components/InsightCard'
 
-const games = [
-  {
-    home: 'Calgary', homeAbbr: 'CGY', homeGoalie: 'Markstrom', homeScore: 3,
-    away: 'Edmonton', awayAbbr: 'EDM', awayGoalie: 'Skinner', awayScore: 2,
-    status: 'live', period: '3rd', time: '4:22', strength: 'PP — CGY',
-    pullRisk: 'EDM 82%', pullRiskLevel: 'red', winProb: 'CGY 71%', featured: true
-  },
-  {
-    home: 'Boston', homeAbbr: 'BOS', homeGoalie: 'Swayman', homeScore: 1,
-    away: 'Tampa Bay', awayAbbr: 'TBL', awayGoalie: 'Vasilevskiy', awayScore: 1,
-    status: 'live', period: '2nd', time: '11:04', strength: 'Even',
-    pullRisk: 'Low', pullRiskLevel: 'green', winProb: 'TBL 52%', featured: false
-  },
-  {
-    home: 'Vancouver', homeAbbr: 'VAN', homeGoalie: 'TBC', homeScore: null,
-    away: 'Vegas', awayAbbr: 'VGK', awayGoalie: 'TBC', awayScore: null,
-    status: 'upcoming', time: '9:00 PM MT', strength: 'Goalie TBC',
-    pullRisk: null, winProb: 'VAN 54%', edge: '+5%', featured: false
+const BASE = 'https://pucklytics-backend.onrender.com'
+
+function periodLabel(p) {
+  if (p === 1) return '1st'
+  if (p === 2) return '2nd'
+  if (p === 3) return '3rd'
+  if (p === 4) return 'OT'
+  if (p >= 5) return 'SO'
+  return ''
+}
+
+function mapGameState(state) {
+  if (state === 'LIVE' || state === 'CRIT') return 'live'
+  if (state === 'OFF' || state === 'FINAL') return 'final'
+  return 'upcoming'
+}
+
+function formatStrength(s) {
+  if (!s || s === 'even') return 'Even'
+  return s.toUpperCase()
+}
+
+function formatWinProb(prob, home, away) {
+  if (prob === null || prob === undefined) return null
+  const h = Math.round(prob * 100)
+  const a = 100 - h
+  return h >= a ? `${home} ${h}%` : `${away} ${a}%`
+}
+
+function mapToGameCard(g) {
+  const status = mapGameState(g.game_state)
+  const isLive = status === 'live'
+  const homeLeading = g.home_score > g.away_score
+  return {
+    game_id: g.game_id,
+    home: g.home_team,
+    homeGoalie: null,
+    homeScore: status === 'upcoming' ? null : g.home_score,
+    away: g.away_team,
+    awayGoalie: null,
+    awayScore: status === 'upcoming' ? null : g.away_score,
+    status,
+    period: isLive ? periodLabel(g.period) : null,
+    time: isLive ? g.time_remaining : status === 'upcoming' ? 'Upcoming' : 'Final',
+    strength: formatStrength(g.strength),
+    pullRisk: null,
+    pullRiskLevel: null,
+    winProb: formatWinProb(g.win_probability, g.home_team, g.away_team),
+    featured: isLive && homeLeading,
   }
-]
+}
 
 const insights = [
   {
     title: 'Empty net',
-    desc: 'Pull timing, EN score rates, coach patterns by situation',
+    desc: 'Pull timing, EN score rates, and coach tendencies by game situation',
     icon: (
       <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
         <rect x="3" y="8" width="18" height="13" rx="2" stroke="#2563EB" strokeWidth="1.5"/>
@@ -75,6 +107,22 @@ const insights = [
 ]
 
 export default function HomePage({ onNav }) {
+  const [games, setGames] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15000)
+
+    fetch(`${BASE}/games/today`, { signal: controller.signal })
+      .then(r => r.json())
+      .then(data => setGames(Array.isArray(data) ? data.map(mapToGameCard) : []))
+      .catch(() => setGames([]))
+      .finally(() => { clearTimeout(timeoutId); setLoading(false) })
+
+    return () => { clearTimeout(timeoutId); controller.abort() }
+  }, [])
+
   return (
     <div className="page">
       <nav className="nav">
@@ -102,9 +150,15 @@ export default function HomePage({ onNav }) {
 
         <div>
           <div className="sec">Tonight</div>
-          <div className="row3">
-            {games.map((g, i) => <GameCard key={i} game={g} />)}
-          </div>
+          {loading ? (
+            <div className="loading-card">Loading games…</div>
+          ) : games.length === 0 ? (
+            <div className="empty-card">No games today</div>
+          ) : (
+            <div className="row3">
+              {games.map((g, i) => <GameCard key={g.game_id ?? i} game={g} />)}
+            </div>
+          )}
         </div>
 
         <div>
