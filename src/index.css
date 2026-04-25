@@ -386,3 +386,6 @@ body { background: #F7F8FA; font-family: system-ui, sans-serif; }
 .ddv-events-table tr:last-child td { border-bottom: none; }
 .ddv-events-table tr.ev-home { color: #2563EB; }
 .ddv-events-table tr.ev-away { color: #DC2626; }
+.ddv-events-table td.ev-w-home { color: #2563EB; font-weight: 500; }
+.ddv-events-table td.ev-w-away { color: #DC2626; font-weight: 500; }
+.ddv-events-empty { padding: 10px; font-size: 12px; color: #9CA3AF; text-align: center; }

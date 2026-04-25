@@ -16,6 +16,43 @@ const TEAMS = {
 }
 function teamName(abbr) { return TEAMS[abbr] || abbr }
 
+const EVENT_LABELS = {
+  'shot-on-goal':  'Shot on goal',
+  'missed-shot':   'Missed shot',
+  'blocked-shot':  'Blocked shot',
+  'penalty':       'Penalty',
+  'faceoff':       'Faceoff win',
+  'takeaway':      'Takeaway',
+}
+function fmtEventType(type) {
+  if (!type) return '—'
+  return EVENT_LABELS[type] ?? type.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+function parseClockSecs(clock) {
+  if (!clock || typeof clock !== 'string') return null
+  const [m, s] = clock.split(':').map(Number)
+  if (isNaN(m) || isNaN(s)) return null
+  return m * 60 + s
+}
+
+function parseTimeInPeriod(tip) {
+  if (tip == null) return null
+  if (typeof tip === 'number') return tip
+  const remaining = parseClockSecs(tip)
+  return remaining != null ? 1200 - remaining : null
+}
+
+function calcEventAge(event, currentPeriod, currentTimeRemaining) {
+  const curRemaining = parseClockSecs(currentTimeRemaining)
+  if (curRemaining == null || currentPeriod == null || event.period == null) return null
+  const curElapsed = 1200 - curRemaining
+  const evElapsed = parseTimeInPeriod(event.time_in_period)
+  if (evElapsed == null) return null
+  const age = (currentPeriod - event.period) * 1200 + curElapsed - evElapsed
+  return age >= 0 ? age : null
+}
+
 function fmtTimestamp(ts) {
   if (!ts) return null
   try { return new Date(ts).toISOString().substring(11, 19) } catch (_) { return null }
@@ -122,14 +159,16 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
       const { signal } = controllerRef.current
       const timeoutId = setTimeout(() => controllerRef.current?.abort(), 15000)
       try {
-        const [gameRes, tiltRes] = await Promise.allSettled([
-          fetch(`${BASE}/games/${gameId}`,      { signal }).then(r => r.json()),
-          fetch(`${BASE}/games/${gameId}/tilt`, { signal }).then(r => r.json()),
+        const [gameRes, tiltRes, eventsRes] = await Promise.allSettled([
+          fetch(`${BASE}/games/${gameId}`,        { signal }).then(r => r.json()),
+          fetch(`${BASE}/games/${gameId}/tilt`,   { signal }).then(r => r.json()),
+          fetch(`${BASE}/games/${gameId}/events`, { signal }).then(r => r.json()),
         ])
         if (!active || signal.aborted) return
         setData({
-          game: gameRes.status === 'fulfilled' ? gameRes.value : null,
-          tilt: tiltRes.status === 'fulfilled' ? tiltRes.value : null,
+          game:   gameRes.status   === 'fulfilled' ? gameRes.value   : null,
+          tilt:   tiltRes.status   === 'fulfilled' ? tiltRes.value   : null,
+          events: eventsRes.status === 'fulfilled' ? eventsRes.value : null,
         })
       } catch (_) {
         // ignore aborts and network errors; keep existing data on re-polls
@@ -357,31 +396,42 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
                 </div>
                 {eventsOpen && (
                   <div className="ddv-events-wrap">
-                    <table className="ddv-events-table">
-                      <thead>
-                        <tr>
-                          <th>Event</th>
-                          <th>Team</th>
-                          <th>Age</th>
-                          <th>Base</th>
-                          <th>Weight</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(data.tilt?.history ?? []).slice().reverse().map((h, i) => {
-                          const isHome = h.team === homeAbbr
-                          return (
-                            <tr key={i} className={isHome ? 'ev-home' : 'ev-away'}>
-                              <td>{h.event_type ?? h.event ?? '—'}</td>
-                              <td>{h.team ?? '—'}</td>
-                              <td>{formatAge(h.age)}</td>
-                              <td>{h.base_weight != null ? +h.base_weight.toFixed(2) : '—'}</td>
-                              <td>{h.weight != null ? +h.weight.toFixed(2) : h.decayed_weight != null ? +h.decayed_weight.toFixed(2) : '—'}</td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
+                    {g.time_remaining === 'Intermission' ? (
+                      <div className="ddv-events-empty">Intermission — events reset</div>
+                    ) : (
+                      <table className="ddv-events-table">
+                        <thead>
+                          <tr>
+                            <th>Event</th>
+                            <th>Team</th>
+                            <th>Age</th>
+                            <th>Base</th>
+                            <th>Weight</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Array.isArray(data.events) && data.events.length > 0 ? (
+                            data.events.map((e, i) => {
+                              const isHome = String(e.team_id) === String(g.home_team)
+                              const isAway = String(e.team_id) === String(g.away_team)
+                              return (
+                                <tr key={e.sort_order ?? i} className={isHome ? 'ev-home' : isAway ? 'ev-away' : ''}>
+                                  <td>{fmtEventType(e.event_type)}</td>
+                                  <td>{e.team_id ?? '—'}</td>
+                                  <td>{formatAge(calcEventAge(e, g.period, g.time_remaining))}</td>
+                                  <td>{e.base_weight != null ? (+e.base_weight).toFixed(1) : '—'}</td>
+                                  <td className={isHome ? 'ev-w-home' : isAway ? 'ev-w-away' : ''}>
+                                    {e.decayed_weight != null ? (+e.decayed_weight).toFixed(2) : '—'}
+                                  </td>
+                                </tr>
+                              )
+                            })
+                          ) : (
+                            <tr><td colSpan={5} className="ddv-events-empty">No active events</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
                 )}
 
