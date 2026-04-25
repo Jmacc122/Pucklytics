@@ -333,3 +333,49 @@ body { background: #F7F8FA; font-family: system-ui, sans-serif; }
 .ddv-s-blue { color: #2563EB; }
 
 .ddv-strip-div { width: 1px; height: 32px; background: #F3F4F6; flex-shrink: 0; }
+
+.ddv-events-bar { display: flex; justify-content: flex-end; margin: 8px 0 2px; }
+
+.ddv-events-toggle {
+  background: none;
+  border: none;
+  font-size: 12px;
+  color: #6B7280;
+  cursor: pointer;
+  padding: 2px 0;
+  letter-spacing: 0.02em;
+}
+.ddv-events-toggle:hover { color: #0D1117; }
+
+.ddv-events-wrap {
+  background: #fff;
+  border: 1px solid #F3F4F6;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.ddv-events-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.ddv-events-table th {
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #9CA3AF;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-bottom: 1px solid #F3F4F6;
+  background: #FAFAFA;
+}
+.ddv-events-table td {
+  padding: 5px 10px;
+  color: inherit;
+  border-bottom: 1px solid #F9FAFB;
+}
+.ddv-events-table tr:last-child td { border-bottom: none; }
+.ddv-events-table tr.ev-home { color: #2563EB; }
+.ddv-events-table tr.ev-away { color: #DC2626; }

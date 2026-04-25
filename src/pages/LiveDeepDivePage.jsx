@@ -16,6 +16,13 @@ const TEAMS = {
 }
 function teamName(abbr) { return TEAMS[abbr] || abbr }
 
+function formatAge(secs) {
+  if (secs == null) return '—'
+  const m = Math.floor(secs / 60)
+  const s = secs % 60
+  return `${m}:${String(s).padStart(2, '0')} ago`
+}
+
 function formatMT(utcStr) {
   if (!utcStr) return '—'
   try {
@@ -92,6 +99,7 @@ function NavBar({ onNav }) {
 export default function LiveDeepDivePage({ onNav, gameId }) {
   const [data, setData] = useState(null)   // { game, tilt }
   const [loading, setLoading] = useState(true)
+  const [eventsOpen, setEventsOpen] = useState(false)
   const tiltRef = useRef(null)
   const tiltInst = useRef(null)
   const kmRef = useRef(null)
@@ -146,12 +154,15 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
     if (mapGameState(data.game.game_state) === 'upcoming') return
 
     const history = data.tilt?.history ?? []
-    const tiltLabels = history.map((h, i) =>
-      typeof h === 'object' ? (h.time ?? h.t ?? h.timestamp ?? String(i)) : String(i)
-    )
+    const tiltLabels = history.map((h, i) => {
+      if (typeof h !== 'object') return String(i)
+      if (h.period != null && h.time_remaining != null) return `P${h.period} ${h.time_remaining}`
+      return h.time ?? h.t ?? h.timestamp ?? String(i)
+    })
     const tiltVals = history.map(h => {
       const raw = typeof h === 'object' ? (h.net_tilt ?? h.value ?? h.v ?? 0) : (typeof h === 'number' ? h : 0)
-      return Math.min(60, Math.round(Math.abs(raw > 1 ? raw : raw * 100)))
+      const norm = Math.abs(raw) > 1 ? raw / 100 : raw
+      return Math.min(60, Math.max(-60, Math.round(norm * 100)))
     })
     const labels = tiltLabels.length ? tiltLabels : ['—']
     const vals   = tiltVals.length   ? tiltVals   : [0]
@@ -170,11 +181,14 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
             datasets: [{
               data: vals,
               borderColor: '#2563EB',
-              backgroundColor: 'rgba(37,99,235,0.07)',
+              backgroundColor: 'transparent',
               borderWidth: 2,
               pointRadius: 0,
-              tension: 0.4,
-              fill: true,
+              tension: 0.3,
+              fill: false,
+              segment: {
+                borderColor: ctx => ctx.p1.parsed.y >= 0 ? '#2563EB' : '#DC2626',
+              },
             }]
           },
           options: {
@@ -182,8 +196,17 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
             maintainAspectRatio: false,
             plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
             scales: {
-              x: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#9CA3AF', maxRotation: 30 } },
-              y: { min: 0, max: 60, grid: { color: '#F3F4F6' }, ticks: { font: { size: 10 }, color: '#9CA3AF', callback: v => v + '%' } },
+              x: {
+                grid: { display: false },
+                ticks: { font: { size: 9 }, color: '#9CA3AF', maxRotation: 30, maxTicksLimit: 8 },
+              },
+              y: {
+                min: -60,
+                max: 60,
+                grid: { color: ctx => ctx.tick.value === 0 ? '#9CA3AF' : '#F3F4F6' },
+                ticks: { font: { size: 10 }, color: '#9CA3AF', callback: v => v + '%', stepSize: 20 },
+                title: { display: true, text: 'tilt', font: { size: 10 }, color: '#9CA3AF' },
+              },
             }
           }
         })
@@ -321,6 +344,41 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
                     </g>
                   </svg>
                 </div>
+
+                <div className="ddv-events-bar">
+                  <button className="ddv-events-toggle" onClick={() => setEventsOpen(o => !o)}>
+                    {eventsOpen ? 'Hide events ↑' : 'View events →'}
+                  </button>
+                </div>
+                {eventsOpen && (
+                  <div className="ddv-events-wrap">
+                    <table className="ddv-events-table">
+                      <thead>
+                        <tr>
+                          <th>Event</th>
+                          <th>Team</th>
+                          <th>Age</th>
+                          <th>Base</th>
+                          <th>Weight</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(data.tilt?.history ?? []).slice().reverse().map((h, i) => {
+                          const isHome = h.team === homeAbbr
+                          return (
+                            <tr key={i} className={isHome ? 'ev-home' : 'ev-away'}>
+                              <td>{h.event_type ?? h.event ?? '—'}</td>
+                              <td>{h.team ?? '—'}</td>
+                              <td>{formatAge(h.age)}</td>
+                              <td>{h.base_weight != null ? +h.base_weight.toFixed(2) : '—'}</td>
+                              <td>{h.weight != null ? +h.weight.toFixed(2) : h.decayed_weight != null ? +h.decayed_weight.toFixed(2) : '—'}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
 
                 <div className="ddv-metrics">
                   <div className="ddv-metric">
