@@ -7,7 +7,7 @@ export default function GameCard({ game }) {
         ) : (
           <span className="badge bl">{game.time}</span>
         )}
-        <span className="badge bf">{game.strength}</span>
+        {game.strength && <span className="badge bf">{game.strength}</span>}
       </div>
 
       <div className="gteam">

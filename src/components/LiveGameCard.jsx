@@ -68,7 +68,7 @@ export default function LiveGameCard({ game, onClick }) {
           <div className="lc-lbl">Ice tilt</div>
           <div className="tilt-container">
             <span className="tilt-label" style={game.tiltColor === 'blue' && game.tiltSide === 'home' ? { color: '#2563EB' } : {}}>
-              {game.home.split(' ')[0].slice(0, 3).toUpperCase()}
+              {game.homeAbbr || game.home.slice(0, 3).toUpperCase()}
             </span>
             <div className="tilt-svg-wrap">
               <svg width="100%" height="22" viewBox="0 0 140 22" preserveAspectRatio="none">
@@ -80,7 +80,7 @@ export default function LiveGameCard({ game, onClick }) {
               </svg>
             </div>
             <span className="tilt-label r" style={game.tiltColor === 'red' && game.tiltSide === 'away' ? { color: '#DC2626' } : {}}>
-              {game.away.split(' ')[0].slice(0, 3).toUpperCase()}
+              {game.awayAbbr || game.away.slice(0, 3).toUpperCase()}
             </span>
           </div>
         </div>

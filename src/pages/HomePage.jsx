@@ -4,6 +4,31 @@ import InsightCard from '../components/InsightCard'
 
 const BASE = 'https://pucklytics-backend.onrender.com'
 
+const TEAMS = {
+  ANA: 'Anaheim',    ARI: 'Arizona',     BOS: 'Boston',      BUF: 'Buffalo',
+  CAR: 'Carolina',   CBJ: 'Columbus',    CGY: 'Calgary',     CHI: 'Chicago',
+  COL: 'Colorado',   DAL: 'Dallas',      DET: 'Detroit',     EDM: 'Edmonton',
+  FLA: 'Florida',    LAK: 'LA Kings',    MIN: 'Minnesota',   MTL: 'Montreal',
+  NJD: 'New Jersey', NSH: 'Nashville',   NYI: 'NY Islanders',NYR: 'NY Rangers',
+  OTT: 'Ottawa',     PHI: 'Philadelphia',PIT: 'Pittsburgh',  SEA: 'Seattle',
+  SJS: 'San Jose',   STL: 'St. Louis',   TBL: 'Tampa Bay',   TOR: 'Toronto',
+  VAN: 'Vancouver',  VGK: 'Vegas',       WPG: 'Winnipeg',    WSH: 'Washington',
+}
+
+function teamName(abbr) { return TEAMS[abbr] || abbr }
+
+function formatMT(utcStr) {
+  if (!utcStr) return '—'
+  try {
+    return new Date(utcStr).toLocaleTimeString('en-US', {
+      timeZone: 'America/Denver',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }) + ' MT'
+  } catch (_) { return '—' }
+}
+
 function periodLabel(p) {
   if (p === 1) return '1st'
   if (p === 2) return '2nd'
@@ -34,19 +59,20 @@ function formatWinProb(prob, home, away) {
 function mapToGameCard(g) {
   const status = mapGameState(g.game_state)
   const isLive = status === 'live'
+  const isUpcoming = status === 'upcoming'
   const homeLeading = g.home_score > g.away_score
   return {
     game_id: g.game_id,
-    home: g.home_team,
+    home: teamName(g.home_team),
     homeGoalie: null,
-    homeScore: status === 'upcoming' ? null : g.home_score,
-    away: g.away_team,
+    homeScore: isUpcoming ? null : g.home_score,
+    away: teamName(g.away_team),
     awayGoalie: null,
-    awayScore: status === 'upcoming' ? null : g.away_score,
+    awayScore: isUpcoming ? null : g.away_score,
     status,
     period: isLive ? periodLabel(g.period) : null,
-    time: isLive ? g.time_remaining : status === 'upcoming' ? 'Upcoming' : 'Final',
-    strength: formatStrength(g.strength),
+    time: isLive ? g.time_remaining : isUpcoming ? formatMT(g.start_time_utc) : 'Final',
+    strength: isLive ? formatStrength(g.strength) : null,
     pullRisk: null,
     pullRiskLevel: null,
     winProb: formatWinProb(g.win_probability, g.home_team, g.away_team),

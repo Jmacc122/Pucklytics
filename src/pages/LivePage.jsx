@@ -3,6 +3,31 @@ import LiveGameCard from '../components/LiveGameCard'
 
 const BASE = 'https://pucklytics-backend.onrender.com'
 
+const TEAMS = {
+  ANA: 'Anaheim',    ARI: 'Arizona',     BOS: 'Boston',      BUF: 'Buffalo',
+  CAR: 'Carolina',   CBJ: 'Columbus',    CGY: 'Calgary',     CHI: 'Chicago',
+  COL: 'Colorado',   DAL: 'Dallas',      DET: 'Detroit',     EDM: 'Edmonton',
+  FLA: 'Florida',    LAK: 'LA Kings',    MIN: 'Minnesota',   MTL: 'Montreal',
+  NJD: 'New Jersey', NSH: 'Nashville',   NYI: 'NY Islanders',NYR: 'NY Rangers',
+  OTT: 'Ottawa',     PHI: 'Philadelphia',PIT: 'Pittsburgh',  SEA: 'Seattle',
+  SJS: 'San Jose',   STL: 'St. Louis',   TBL: 'Tampa Bay',   TOR: 'Toronto',
+  VAN: 'Vancouver',  VGK: 'Vegas',       WPG: 'Winnipeg',    WSH: 'Washington',
+}
+
+function teamName(abbr) { return TEAMS[abbr] || abbr }
+
+function formatMT(utcStr) {
+  if (!utcStr) return '—'
+  try {
+    return new Date(utcStr).toLocaleTimeString('en-US', {
+      timeZone: 'America/Denver',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }) + ' MT'
+  } catch (_) { return '—' }
+}
+
 const dates = [
   { day: 'Wed', num: 'Apr 22' },
   { day: 'Thu', num: 'Apr 23' },
@@ -53,12 +78,14 @@ function mapLiveGame(g, tilt) {
   const homeLeading = g.home_score > g.away_score
   return {
     game_id: g.game_id,
-    home: g.home_team,
+    home: teamName(g.home_team),
+    homeAbbr: g.home_team,
     homeSog: null,
     homeScore: g.home_score,
     homePulled: false,
     homeHighlight: homeLeading,
-    away: g.away_team,
+    away: teamName(g.away_team),
+    awayAbbr: g.away_team,
     awaySog: null,
     awayScore: g.away_score,
     awayPulled: false,
@@ -77,9 +104,9 @@ function mapLiveGame(g, tilt) {
 function mapUpcomingGame(g) {
   return {
     game_id: g.game_id,
-    home: g.home_team,
-    away: g.away_team,
-    time: '—',
+    home: teamName(g.home_team),
+    away: teamName(g.away_team),
+    time: formatMT(g.start_time_utc),
     model: '—',
     edge: null,
   }
@@ -88,10 +115,10 @@ function mapUpcomingGame(g) {
 function mapFinalGame(g) {
   return {
     game_id: g.game_id,
-    home: g.home_team,
+    home: teamName(g.home_team),
     homeSog: null,
     homeScore: g.home_score,
-    away: g.away_team,
+    away: teamName(g.away_team),
     awaySog: null,
     awayScore: g.away_score,
     totalShots: null,
