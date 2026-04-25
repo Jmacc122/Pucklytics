@@ -139,9 +139,10 @@ function NavBar({ onNav }) {
 }
 
 export default function LiveDeepDivePage({ onNav, gameId }) {
-  const [data, setData] = useState(null)   // { game, tilt }
+  const [data, setData] = useState(null)   // { game, tilt, events }
   const [loading, setLoading] = useState(true)
   const [eventsOpen, setEventsOpen] = useState(false)
+  const [tiltMode, setTiltMode] = useState('recent')  // 'recent' | 'full'
   const tiltRef = useRef(null)
   const tiltInst = useRef(null)
   const kmRef = useRef(null)
@@ -158,10 +159,11 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
       controllerRef.current = new AbortController()
       const { signal } = controllerRef.current
       const timeoutId = setTimeout(() => controllerRef.current?.abort(), 15000)
+      const tiltUrl = `${BASE}/games/${gameId}/tilt${tiltMode === 'full' ? '?full=true' : ''}`
       try {
         const [gameRes, tiltRes, eventsRes] = await Promise.allSettled([
           fetch(`${BASE}/games/${gameId}`,        { signal }).then(r => r.json()),
-          fetch(`${BASE}/games/${gameId}/tilt`,   { signal }).then(r => r.json()),
+          fetch(tiltUrl,                          { signal }).then(r => r.json()),
           fetch(`${BASE}/games/${gameId}/events`, { signal }).then(r => r.json()),
         ])
         if (!active || signal.aborted) return
@@ -185,7 +187,7 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
       clearInterval(pollId)
       controllerRef.current?.abort()
     }
-  }, [gameId])
+  }, [gameId, tiltMode])
 
   // Destroy charts on unmount only (not on every poll)
   useEffect(() => {
@@ -211,11 +213,19 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
     const labels = tiltLabels.length ? tiltLabels : ['—']
     const vals   = tiltVals.length   ? tiltVals   : [0]
 
+    // Auto-scale y-axis with 20% padding
+    const lo  = vals.length ? Math.min(...vals) : -10
+    const hi  = vals.length ? Math.max(...vals) :  10
+    const pad = Math.max(2, (hi - lo) * 0.2)
+    const yMin = Math.floor(lo - pad)
+    const yMax = Math.ceil(hi + pad)
+
     if (tiltRef.current) {
       if (tiltInst.current) {
-        // Update data in-place — no flicker, no animation
         tiltInst.current.data.labels = labels
         tiltInst.current.data.datasets[0].data = vals
+        tiltInst.current.options.scales.y.min = yMin
+        tiltInst.current.options.scales.y.max = yMax
         tiltInst.current.update('none')
       } else {
         tiltInst.current = new Chart(tiltRef.current, {
@@ -245,10 +255,10 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
                 ticks: { font: { size: 9 }, color: '#9CA3AF', maxRotation: 30, maxTicksLimit: 8 },
               },
               y: {
-                min: -60,
-                max: 60,
+                min: yMin,
+                max: yMax,
                 grid: { color: ctx => ctx.tick.value === 0 ? '#9CA3AF' : '#F3F4F6' },
-                ticks: { font: { size: 10 }, color: '#9CA3AF', callback: v => v > 0 ? '+' + v : String(v), stepSize: 20 },
+                ticks: { font: { size: 10 }, color: '#9CA3AF', callback: v => v > 0 ? '+' + v : String(v) },
                 title: { display: true, text: 'tilt', font: { size: 10 }, color: '#9CA3AF' },
               },
             }
@@ -463,7 +473,21 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
                 </div>
 
                 <div className="card ddv-chart-card">
-                  <div className="ddv-chart-lbl">Rolling tilt · last 10 min</div>
+                  <div className="ddv-chart-top">
+                    <div className="ddv-chart-lbl">
+                      Rolling tilt · {tiltMode === 'full' ? 'full game' : 'last 10 min'}
+                    </div>
+                    <div className="tilt-mode-toggle">
+                      <button
+                        className={`tmt-btn ${tiltMode === 'recent' ? 'on' : ''}`}
+                        onClick={() => setTiltMode('recent')}
+                      >Last 10 min</button>
+                      <button
+                        className={`tmt-btn ${tiltMode === 'full' ? 'on' : ''}`}
+                        onClick={() => setTiltMode('full')}
+                      >Full game</button>
+                    </div>
+                  </div>
                   <div style={{ height: 130 }}><canvas ref={tiltRef}></canvas></div>
                   <div className="tilt-legend">
                     <span className="tilt-legend-item"><span className="tilt-legend-sq blue"></span>{homeAbbr}</span>
