@@ -334,6 +334,13 @@ body { background: #F7F8FA; font-family: system-ui, sans-serif; }
 
 .ddv-strip-div { width: 1px; height: 32px; background: #F3F4F6; flex-shrink: 0; }
 
+.tilt-legend { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+.tilt-legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #6B7280; }
+.tilt-legend-sq { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.tilt-legend-sq.blue { background: #2563EB; }
+.tilt-legend-sq.red { background: #DC2626; }
+.tilt-legend-note { font-size: 10px; color: #9CA3AF; margin-left: auto; }
+
 .ddv-events-bar { display: flex; justify-content: flex-end; margin: 8px 0 2px; }
 
 .ddv-events-toggle {

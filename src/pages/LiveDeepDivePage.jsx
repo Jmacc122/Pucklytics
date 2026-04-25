@@ -16,6 +16,11 @@ const TEAMS = {
 }
 function teamName(abbr) { return TEAMS[abbr] || abbr }
 
+function fmtTimestamp(ts) {
+  if (!ts) return null
+  try { return new Date(ts).toISOString().substring(11, 19) } catch (_) { return null }
+}
+
 function formatAge(secs) {
   if (secs == null) return '—'
   const m = Math.floor(secs / 60)
@@ -157,7 +162,7 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
     const tiltLabels = history.map((h, i) => {
       if (typeof h !== 'object') return String(i)
       if (h.period != null && h.time_remaining != null) return `P${h.period} ${h.time_remaining}`
-      return h.time ?? h.t ?? h.timestamp ?? String(i)
+      return h.time ?? h.t ?? fmtTimestamp(h.timestamp) ?? String(i)
     })
     const tiltVals = history.map(h => {
       const raw = typeof h === 'object' ? (h.net_tilt ?? h.value ?? h.v ?? 0) : (typeof h === 'number' ? h : 0)
@@ -204,7 +209,7 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
                 min: -60,
                 max: 60,
                 grid: { color: ctx => ctx.tick.value === 0 ? '#9CA3AF' : '#F3F4F6' },
-                ticks: { font: { size: 10 }, color: '#9CA3AF', callback: v => v + '%', stepSize: 20 },
+                ticks: { font: { size: 10 }, color: '#9CA3AF', callback: v => v > 0 ? '+' + v : String(v), stepSize: 20 },
                 title: { display: true, text: 'tilt', font: { size: 10 }, color: '#9CA3AF' },
               },
             }
@@ -401,6 +406,11 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
                 <div className="card ddv-chart-card">
                   <div className="ddv-chart-lbl">Rolling tilt · last 10 min</div>
                   <div style={{ height: 130 }}><canvas ref={tiltRef}></canvas></div>
+                  <div className="tilt-legend">
+                    <span className="tilt-legend-item"><span className="tilt-legend-sq blue"></span>{homeAbbr}</span>
+                    <span className="tilt-legend-item"><span className="tilt-legend-sq red"></span>{awayAbbr}</span>
+                    <span className="tilt-legend-note">Positive = home team momentum</span>
+                  </div>
                 </div>
               </div>
 
