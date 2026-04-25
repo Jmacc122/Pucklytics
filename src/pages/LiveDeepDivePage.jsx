@@ -404,7 +404,7 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
                           <tr>
                             <th>Event</th>
                             <th>Team</th>
-                            <th>Age</th>
+                            <th>Time</th>
                             <th>Base</th>
                             <th>Weight</th>
                           </tr>
@@ -412,13 +412,13 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
                         <tbody>
                           {Array.isArray(data.events) && data.events.length > 0 ? (
                             data.events.map((e, i) => {
-                              const isHome = String(e.team_id) === String(g.home_team)
-                              const isAway = String(e.team_id) === String(g.away_team)
+                              const isHome = e.team_abbrev === homeAbbr
+                              const isAway = e.team_abbrev === awayAbbr
                               return (
                                 <tr key={e.sort_order ?? i} className={isHome ? 'ev-home' : isAway ? 'ev-away' : ''}>
                                   <td>{fmtEventType(e.event_type)}</td>
-                                  <td>{e.team_id ?? '—'}</td>
-                                  <td>{formatAge(calcEventAge(e, g.period, g.time_remaining))}</td>
+                                  <td>{e.team_abbrev ?? '—'}</td>
+                                  <td>{e.period != null && e.time_in_period ? `P${e.period} ${e.time_in_period}` : '—'}</td>
                                   <td>{e.base_weight != null ? (+e.base_weight).toFixed(1) : '—'}</td>
                                   <td className={isHome ? 'ev-w-home' : isAway ? 'ev-w-away' : ''}>
                                     {e.decayed_weight != null ? (+e.decayed_weight).toFixed(2) : '—'}
