@@ -300,8 +300,9 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
   const g    = data?.game
   const tilt = data?.tilt
 
-  const status     = g ? mapGameState(g.game_state) : null
-  const isUpcoming = status === 'upcoming'
+  const status        = g ? mapGameState(g.game_state) : null
+  const isUpcoming    = status === 'upcoming'
+  const isIntermission = g?.time_remaining === 'Intermission'
 
   const homeAbbr = g?.home_team ?? 'HOME'
   const awayAbbr = g?.away_team ?? 'AWAY'
@@ -318,6 +319,15 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
   const tiltAdvAbbr  = net >= 0 ? homeAbbr : awayAbbr
   const homeWeighted = tilt?.home_score != null ? +tilt.home_score.toFixed(1) : '—'
   const awayWeighted = tilt?.away_score != null ? +tilt.away_score.toFixed(1) : '—'
+
+  // During intermission override visuals to neutral — chart data unchanged
+  const dispTiltAngle    = isIntermission ? 0 : tiltAngle
+  const dispBeamFill     = isIntermission ? 144 : beamFill   // 144 = 50% of 288
+  const dispHomeTiltPct  = isIntermission ? '—' : homeTiltPct + '%'
+  const dispAwayTiltPct  = isIntermission ? '—' : awayTiltPct + '%'
+  const dispNetTiltLabel = isIntermission ? '—' : netTiltLabel
+  const dispHomeWeighted = isIntermission ? '—' : homeWeighted
+  const dispAwayWeighted = isIntermission ? '—' : awayWeighted
 
   // Pull risk — mock until endpoint exists
   const pullRisk = 82
@@ -385,18 +395,19 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
 
                 <div className="card">
                   <div className="ddv-tilt-teams">
-                    <span className="ddv-tilt-side blue">{homeAbbr} <strong>{homeTiltPct}%</strong></span>
-                    <span className="ddv-tilt-mid">net tilt {netTiltLabel} ({tiltAdvAbbr})</span>
-                    <span className="ddv-tilt-side muted"><strong>{awayTiltPct}%</strong> {awayAbbr}</span>
+                    <span className="ddv-tilt-side blue">{homeAbbr} <strong>{dispHomeTiltPct}</strong></span>
+                    <span className="ddv-tilt-mid">net tilt {dispNetTiltLabel}{!isIntermission && ` (${tiltAdvAbbr})`}</span>
+                    <span className="ddv-tilt-side muted"><strong>{dispAwayTiltPct}</strong> {awayAbbr}</span>
                   </div>
                   <svg width="100%" height="90" viewBox="0 0 320 90" style={{ display: 'block', margin: '14px 0 6px' }}>
                     <polygon points="160,74 150,86 170,86" fill="#D1D5DB"/>
                     <rect x="132" y="83" width="56" height="5" rx="2.5" fill="#D1D5DB"/>
-                    <g transform={`rotate(${tiltAngle} 160 68)`}>
+                    <g transform={`rotate(${dispTiltAngle} 160 68)`}>
                       <rect x="16" y="62" width="288" height="10" rx="5" fill="#F3F4F6"/>
-                      <rect x="16" y="62" width={beamFill} height="10" rx="5" fill="#2563EB"/>
+                      <rect x="16" y="62" width={dispBeamFill} height="10" rx="5" fill={isIntermission ? '#D1D5DB' : '#2563EB'}/>
                     </g>
                   </svg>
+                  {isIntermission && <div className="ddv-intermission-lbl">Intermission</div>}
                 </div>
 
                 <div className="ddv-events-bar">
@@ -457,17 +468,17 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
                 <div className="ddv-metrics">
                   <div className="ddv-metric">
                     <div className="ddv-m-lbl">Net tilt</div>
-                    <div className={`ddv-m-val ${net !== 0 ? 'blue' : ''}`}>{netTiltLabel}</div>
-                    <div className="ddv-m-sub">{tiltAdvAbbr} adv.</div>
+                    <div className={`ddv-m-val ${!isIntermission && net !== 0 ? 'blue' : ''}`}>{dispNetTiltLabel}</div>
+                    <div className="ddv-m-sub">{isIntermission ? '—' : `${tiltAdvAbbr} adv.`}</div>
                   </div>
                   <div className="ddv-metric">
                     <div className="ddv-m-lbl">{homeAbbr} weighted</div>
-                    <div className="ddv-m-val">{homeWeighted}</div>
+                    <div className="ddv-m-val">{dispHomeWeighted}</div>
                     <div className="ddv-m-sub">score</div>
                   </div>
                   <div className="ddv-metric">
                     <div className="ddv-m-lbl">{awayAbbr} weighted</div>
-                    <div className="ddv-m-val">{awayWeighted}</div>
+                    <div className="ddv-m-val">{dispAwayWeighted}</div>
                     <div className="ddv-m-sub">score</div>
                   </div>
                 </div>
