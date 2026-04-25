@@ -418,7 +418,16 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
                                 <tr key={e.sort_order ?? i} className={isHome ? 'ev-home' : isAway ? 'ev-away' : ''}>
                                   <td>{fmtEventType(e.event_type)}</td>
                                   <td>{e.team_abbrev ?? '—'}</td>
-                                  <td>{e.period != null && e.time_in_period ? `P${e.period} ${e.time_in_period}` : '—'}</td>
+                                  <td>{(() => {
+                                    if (e.period == null || !e.time_in_period) return '—'
+                                    const elapsed = parseClockSecs(e.time_in_period)
+                                    if (elapsed == null) return '—'
+                                    const duration = e.period >= 4 ? 300 : 1200
+                                    const rem = duration - elapsed
+                                    const m = Math.floor(rem / 60)
+                                    const s = rem % 60
+                                    return `P${e.period} ${m}:${String(s).padStart(2, '0')}`
+                                  })()}</td>
                                   <td>{e.base_weight != null ? (+e.base_weight).toFixed(1) : '—'}</td>
                                   <td className={isHome ? 'ev-w-home' : isAway ? 'ev-w-away' : ''}>
                                     {e.decayed_weight != null ? (+e.decayed_weight).toFixed(2) : '—'}
