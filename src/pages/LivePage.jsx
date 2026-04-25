@@ -232,7 +232,7 @@ export default function LivePage({ onNav }) {
           ) : (
             <div className="row3">
               {liveGames.map(g => (
-                <LiveGameCard key={g.game_id} game={g} onClick={() => onNav('livedeep')} />
+                <LiveGameCard key={g.game_id} game={g} onNav={onNav} />
               ))}
             </div>
           )}

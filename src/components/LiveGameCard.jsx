@@ -1,9 +1,9 @@
-export default function LiveGameCard({ game, onClick }) {
+export default function LiveGameCard({ game, onNav }) {
   const tiltStartX = game.tiltSide === 'home' ? 70 : 70 - game.tiltStrength
   const tiltFillColor = game.tiltColor === 'red' ? '#DC2626' : '#2563EB'
 
   return (
-    <div className="lcard live" onClick={onClick} style={onClick ? { cursor: 'pointer' } : {}}>
+    <div className="lcard live" onClick={() => onNav?.('livedeep', game.game_id)} style={onNav ? { cursor: 'pointer' } : {}}>
       <div className="lc-top">
         <span className="badge br">● {game.period} · {game.time}</span>
         <div className="lc-badges">

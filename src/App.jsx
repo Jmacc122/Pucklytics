@@ -7,11 +7,17 @@ import './index.css'
 
 function App() {
   const [page, setPage] = useState('home')
+  const [selectedGameId, setSelectedGameId] = useState(null)
 
-  if (page === 'insights') return <InsightsPage onNav={setPage} />
-  if (page === 'live') return <LivePage onNav={setPage} />
-  if (page === 'livedeep') return <LiveDeepDivePage onNav={setPage} />
-  return <HomePage onNav={setPage} />
+  function handleNav(dest, gameId = null) {
+    setSelectedGameId(gameId)
+    setPage(dest)
+  }
+
+  if (page === 'insights') return <InsightsPage onNav={handleNav} />
+  if (page === 'live') return <LivePage onNav={handleNav} />
+  if (page === 'livedeep') return <LiveDeepDivePage onNav={handleNav} gameId={selectedGameId} />
+  return <HomePage onNav={handleNav} />
 }
 
 export default App
