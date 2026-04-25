@@ -96,35 +96,56 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
   const tiltInst = useRef(null)
   const kmRef = useRef(null)
   const kmInst = useRef(null)
+  const controllerRef = useRef(null)
 
-  // Fetch game + tilt data together so state only flips once
+  // Poll game + tilt every 10 s, same pattern as LivePage
   useEffect(() => {
     if (!gameId) { setLoading(false); return }
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 15000)
+    let active = true
 
-    Promise.allSettled([
-      fetch(`${BASE}/games/${gameId}`,       { signal: controller.signal }).then(r => r.json()),
-      fetch(`${BASE}/games/${gameId}/tilt`,  { signal: controller.signal }).then(r => r.json()),
-    ]).then(([gameRes, tiltRes]) => {
-      setData({
-        game: gameRes.status === 'fulfilled' ? gameRes.value : null,
-        tilt: tiltRes.status === 'fulfilled' ? tiltRes.value : null,
-      })
-    }).finally(() => { clearTimeout(timeoutId); setLoading(false) })
+    async function load() {
+      if (controllerRef.current) controllerRef.current.abort()
+      controllerRef.current = new AbortController()
+      const { signal } = controllerRef.current
+      const timeoutId = setTimeout(() => controllerRef.current?.abort(), 15000)
+      try {
+        const [gameRes, tiltRes] = await Promise.allSettled([
+          fetch(`${BASE}/games/${gameId}`,      { signal }).then(r => r.json()),
+          fetch(`${BASE}/games/${gameId}/tilt`, { signal }).then(r => r.json()),
+        ])
+        if (!active || signal.aborted) return
+        setData({
+          game: gameRes.status === 'fulfilled' ? gameRes.value : null,
+          tilt: tiltRes.status === 'fulfilled' ? tiltRes.value : null,
+        })
+      } catch (_) {
+        // ignore aborts and network errors; keep existing data on re-polls
+      } finally {
+        clearTimeout(timeoutId)
+      }
+    }
 
-    return () => { clearTimeout(timeoutId); controller.abort() }
+    load().finally(() => { if (active) setLoading(false) })
+    const pollId = setInterval(load, 10000)
+
+    return () => {
+      active = false
+      clearInterval(pollId)
+      controllerRef.current?.abort()
+    }
   }, [gameId])
 
-  // Build charts once data arrives (live/final only)
+  // Destroy charts on unmount only (not on every poll)
+  useEffect(() => {
+    return () => { tiltInst.current?.destroy(); kmInst.current?.destroy() }
+  }, [])
+
+  // Create charts first time data arrives; update in-place on subsequent polls
   useEffect(() => {
     if (!data?.game) return
-    const status = mapGameState(data.game.game_state)
-    if (status === 'upcoming') return
+    if (mapGameState(data.game.game_state) === 'upcoming') return
 
     const history = data.tilt?.history ?? []
-
-    // Extract labels + values from history regardless of backend shape
     const tiltLabels = history.map((h, i) =>
       typeof h === 'object' ? (h.time ?? h.t ?? h.timestamp ?? String(i)) : String(i)
     )
@@ -132,38 +153,46 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
       const raw = typeof h === 'object' ? (h.net_tilt ?? h.value ?? h.v ?? 0) : (typeof h === 'number' ? h : 0)
       return Math.min(60, Math.round(Math.abs(raw > 1 ? raw : raw * 100)))
     })
+    const labels = tiltLabels.length ? tiltLabels : ['—']
+    const vals   = tiltVals.length   ? tiltVals   : [0]
 
     if (tiltRef.current) {
-      tiltInst.current?.destroy()
-      tiltInst.current = new Chart(tiltRef.current, {
-        type: 'line',
-        data: {
-          labels: tiltLabels.length ? tiltLabels : ['—'],
-          datasets: [{
-            data: tiltVals.length ? tiltVals : [0],
-            borderColor: '#2563EB',
-            backgroundColor: 'rgba(37,99,235,0.07)',
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.4,
-            fill: true,
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
-          scales: {
-            x: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#9CA3AF', maxRotation: 30 } },
-            y: { min: 0, max: 60, grid: { color: '#F3F4F6' }, ticks: { font: { size: 10 }, color: '#9CA3AF', callback: v => v + '%' } },
+      if (tiltInst.current) {
+        // Update data in-place — no flicker, no animation
+        tiltInst.current.data.labels = labels
+        tiltInst.current.data.datasets[0].data = vals
+        tiltInst.current.update('none')
+      } else {
+        tiltInst.current = new Chart(tiltRef.current, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              data: vals,
+              borderColor: '#2563EB',
+              backgroundColor: 'rgba(37,99,235,0.07)',
+              borderWidth: 2,
+              pointRadius: 0,
+              tension: 0.4,
+              fill: true,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+            scales: {
+              x: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#9CA3AF', maxRotation: 30 } },
+              y: { min: 0, max: 60, grid: { color: '#F3F4F6' }, ticks: { font: { size: 10 }, color: '#9CA3AF', callback: v => v + '%' } },
+            }
           }
-        }
-      })
+        })
+      }
     }
 
-    if (kmRef.current) {
+    // KM chart uses static mock data — create once, never update
+    if (kmRef.current && !kmInst.current) {
       const awayAbbr = data.game.away_team
-      kmInst.current?.destroy()
       kmInst.current = new Chart(kmRef.current, {
         type: 'line',
         plugins: [vertLinePlugin],
@@ -188,8 +217,6 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
         }
       })
     }
-
-    return () => { tiltInst.current?.destroy(); kmInst.current?.destroy() }
   }, [data])
 
   // ── Derived display values ──────────────────────────────────
