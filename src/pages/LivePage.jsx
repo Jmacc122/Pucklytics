@@ -28,14 +28,30 @@ function formatMT(utcStr) {
   } catch (_) { return '—' }
 }
 
-const dates = [
-  { day: 'Wed', num: 'Apr 22' },
-  { day: 'Thu', num: 'Apr 23' },
-  { day: 'Fri', num: 'Apr 24' },
-  { day: 'Today', num: 'Apr 25', active: true },
-  { day: 'Sun', num: 'Apr 27' },
-  { day: 'Mon', num: 'Apr 28' }
-]
+function mtToday() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Denver' })
+}
+
+function addDays(dateStr, n) {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d, 12))
+  dt.setUTCDate(dt.getUTCDate() + n)
+  return dt.toISOString().slice(0, 10)
+}
+
+function buildWindow(centerDate) {
+  const today = mtToday()
+  return Array.from({ length: 7 }, (_, i) => {
+    const date = addDays(centerDate, i - 3)
+    const [y, m, d] = date.split('-').map(Number)
+    const dt = new Date(Date.UTC(y, m - 1, d))
+    return {
+      date,
+      day: date === today ? 'Today' : dt.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' }),
+      num: dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+    }
+  })
+}
 
 function periodLabel(p) {
   if (p === 1) return '1st'
@@ -49,6 +65,7 @@ function periodLabel(p) {
 function mapGameState(state) {
   if (state === 'LIVE' || state === 'CRIT') return 'live'
   if (state === 'OFF' || state === 'FINAL') return 'final'
+  if (state === 'FUT' || state === 'PRE') return 'upcoming'
   return 'upcoming'
 }
 
@@ -131,10 +148,12 @@ export default function LivePage({ onNav }) {
   const [upcomingGames, setUpcomingGames] = useState([])
   const [finalGames, setFinalGames] = useState([])
   const [loading, setLoading] = useState(true)
+  const [windowCenter, setWindowCenter] = useState(mtToday)
   const controllerRef = useRef(null)
 
   useEffect(() => {
     let active = true
+    setLoading(true)
 
     async function load() {
       if (controllerRef.current) controllerRef.current.abort()
@@ -143,7 +162,7 @@ export default function LivePage({ onNav }) {
       const timeoutId = setTimeout(() => controllerRef.current?.abort(), 15000)
 
       try {
-        const res = await fetch(`${BASE}/games/today`, { signal })
+        const res = await fetch(`${BASE}/games/date/${windowCenter}`, { signal })
         const all = await res.json()
         if (!Array.isArray(all)) return
 
@@ -185,7 +204,7 @@ export default function LivePage({ onNav }) {
       clearInterval(pollId)
       controllerRef.current?.abort()
     }
-  }, [])
+  }, [windowCenter])
 
   return (
     <div className="page">
@@ -213,14 +232,19 @@ export default function LivePage({ onNav }) {
       <div className="body">
 
         <div className="date-bar">
-          <button className="date-arrow">←</button>
-          {dates.map((d, i) => (
-            <div key={i} className={`date-pill ${d.active ? 'on' : ''}`}>
+          <button className="date-arrow" onClick={() => setWindowCenter(c => addDays(c, -1))}>←</button>
+          {buildWindow(windowCenter).map(d => (
+            <div
+              key={d.date}
+              className={`date-pill ${d.date === windowCenter ? 'on' : ''}`}
+              onClick={() => setWindowCenter(d.date)}
+              style={{ cursor: 'pointer' }}
+            >
               <div className="dp-day">{d.day}</div>
               <div className="dp-num">{d.num}</div>
             </div>
           ))}
-          <button className="date-arrow">→</button>
+          <button className="date-arrow" onClick={() => setWindowCenter(c => addDays(c, 1))}>→</button>
         </div>
 
         <div>

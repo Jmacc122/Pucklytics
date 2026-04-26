@@ -17,6 +17,10 @@ const TEAMS = {
 
 function teamName(abbr) { return TEAMS[abbr] || abbr }
 
+function mtToday() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Denver' })
+}
+
 function formatMT(utcStr) {
   if (!utcStr) return '—'
   try {
@@ -41,6 +45,7 @@ function periodLabel(p) {
 function mapGameState(state) {
   if (state === 'LIVE' || state === 'CRIT') return 'live'
   if (state === 'OFF' || state === 'FINAL') return 'final'
+  if (state === 'FUT' || state === 'PRE') return 'upcoming'
   return 'upcoming'
 }
 
@@ -140,7 +145,7 @@ export default function HomePage({ onNav }) {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 15000)
 
-    fetch(`${BASE}/games/today`, { signal: controller.signal })
+    fetch(`${BASE}/games/date/${mtToday()}`, { signal: controller.signal })
       .then(r => r.json())
       .then(data => setGames(Array.isArray(data) ? data.map(mapToGameCard) : []))
       .catch(() => setGames([]))
