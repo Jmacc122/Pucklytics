@@ -352,6 +352,24 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
   const circC    = +(2 * Math.PI * circR).toFixed(1)
   const circOff  = +(circC * (1 - pullRisk / 100)).toFixed(1)
 
+  // SOG from game data
+  const homeSog = g?.home_sog ?? null
+  const awaySog = g?.away_sog ?? null
+
+  // Corsi from events (shot-on-goal + missed-shot + blocked-shot)
+  const CORSI_TYPES = new Set(['shot-on-goal', 'missed-shot', 'blocked-shot'])
+  let homeCorsi = 0, awayCorsi = 0
+  if (Array.isArray(data?.events)) {
+    for (const e of data.events) {
+      if (!CORSI_TYPES.has(e.event_type)) continue
+      if (e.team_abbrev === homeAbbr) homeCorsi++
+      else if (e.team_abbrev === awayAbbr) awayCorsi++
+    }
+  }
+  const totalCorsi = homeCorsi + awayCorsi
+  const homeCorsiPct = totalCorsi > 0 ? (homeCorsi / totalCorsi * 100).toFixed(1) : null
+  const awayCorsiPct = totalCorsi > 0 ? (awayCorsi / totalCorsi * 100).toFixed(1) : null
+
   // Win probability
   const homeWinPct = g?.win_probability != null ? Math.round(g.win_probability * 100) : null
   const awayWinPct = homeWinPct != null ? 100 - homeWinPct : null
@@ -590,12 +608,24 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
               <div className="ddv-strip-team">{homeAbbr}</div>
               <div className="ddv-strip-stat">
                 <div className="ddv-s-lbl">SOG</div>
-                <div className="ddv-s-val" style={{ color: '#9CA3AF' }}>—</div>
+                <div className="ddv-s-val">
+                  {homeSog !== null && awaySog !== null ? (
+                    <><span className={homeSog >= awaySog ? 'ddv-s-blue' : ''}>{homeSog}</span>
+                    {' – '}
+                    <span className={awaySog > homeSog ? 'ddv-s-blue' : ''}>{awaySog}</span></>
+                  ) : <span style={{ color: '#9CA3AF' }}>—</span>}
+                </div>
               </div>
               <div className="ddv-strip-div"></div>
               <div className="ddv-strip-stat">
                 <div className="ddv-s-lbl">Corsi%</div>
-                <div className="ddv-s-val" style={{ color: '#9CA3AF' }}>—</div>
+                <div className="ddv-s-val">
+                  {homeCorsiPct !== null ? (
+                    <><span className={+homeCorsiPct >= +awayCorsiPct ? 'ddv-s-blue' : ''}>{homeCorsiPct}%</span>
+                    {' – '}
+                    <span className={+awayCorsiPct > +homeCorsiPct ? 'ddv-s-blue' : ''}>{awayCorsiPct}%</span></>
+                  ) : <span style={{ color: '#9CA3AF' }}>—</span>}
+                </div>
               </div>
               <div className="ddv-strip-div"></div>
               <div className="ddv-strip-stat">
