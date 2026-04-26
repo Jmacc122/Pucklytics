@@ -139,7 +139,8 @@ function NavBar({ onNav }) {
 }
 
 export default function LiveDeepDivePage({ onNav, gameId }) {
-  const [data, setData] = useState(null)   // { game, tilt, events }
+  const [data, setData] = useState(null)         // { game, tilt, events }
+  const [fullEvents, setFullEvents] = useState(null) // all game events for Corsi
   const [loading, setLoading] = useState(true)
   const [eventsOpen, setEventsOpen] = useState(false)
   const [tiltMode, setTiltMode] = useState('recent')  // 'recent' | 'full'
@@ -164,10 +165,11 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
       const tiltUrl   = `${BASE}/games/${gameId}/tilt${useFull ? '?full=true' : ''}`
       const eventsUrl = `${BASE}/games/${gameId}/events${useFull ? '?full=true' : ''}`
       try {
-        const [gameRes, tiltRes, eventsRes] = await Promise.allSettled([
+        const [gameRes, tiltRes, eventsRes, fullEventsRes] = await Promise.allSettled([
           fetch(`${BASE}/games/${gameId}`, { signal }).then(r => r.json()),
           fetch(tiltUrl,                   { signal }).then(r => r.json()),
           fetch(eventsUrl,                 { signal }).then(r => r.json()),
+          fetch(`${BASE}/games/${gameId}/events?full=true`, { signal }).then(r => r.json()),
         ])
         if (!active || signal.aborted) return
         const gameData = gameRes.status === 'fulfilled' ? gameRes.value : null
@@ -176,6 +178,7 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
           tilt:   tiltRes.status   === 'fulfilled' ? tiltRes.value   : null,
           events: eventsRes.status === 'fulfilled' ? eventsRes.value : null,
         })
+        if (fullEventsRes.status === 'fulfilled') setFullEvents(fullEventsRes.value)
         // Stop polling once we confirm the game is final
         const gs = gameData?.game_state
         if ((gs === 'OFF' || gs === 'FINAL') && pollIdRef.current) {
@@ -356,11 +359,11 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
   const homeSog = g?.home_sog ?? null
   const awaySog = g?.away_sog ?? null
 
-  // Corsi from events (shot-on-goal + missed-shot + blocked-shot)
+  // Corsi from full game events (shot-on-goal + missed-shot + blocked-shot)
   const CORSI_TYPES = new Set(['shot-on-goal', 'missed-shot', 'blocked-shot'])
   let homeCorsi = 0, awayCorsi = 0
-  if (Array.isArray(data?.events)) {
-    for (const e of data.events) {
+  if (Array.isArray(fullEvents)) {
+    for (const e of fullEvents) {
       if (!CORSI_TYPES.has(e.event_type)) continue
       if (e.team_abbrev === homeAbbr) homeCorsi++
       else if (e.team_abbrev === awayAbbr) awayCorsi++
