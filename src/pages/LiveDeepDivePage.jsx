@@ -218,10 +218,20 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
     if (!data?.game) return
     if (mapGameState(data.game.game_state) === 'upcoming') return
 
-    const history = (data.tilt?.history ?? []).slice().reverse()
+    // API returns oldest-first; no reversal needed — index 0 = leftmost = oldest
+    const history = data.tilt?.history ?? []
     const tiltLabels = history.map((h, i) => {
       if (typeof h !== 'object') return String(i)
-      if (h.period != null && h.time_remaining != null) return `P${h.period} ${h.time_remaining}`
+      const p = h.period
+      const t = h.time_remaining
+      if (t === 'Intermission' || t === 'INT') {
+        if (p === 1) return 'P1 Int'
+        if (p === 2) return 'P2 Int'
+        if (p === 3) return 'OT Int'
+        return `P${p} Int`
+      }
+      const pLabel = p === 4 ? 'OT' : p === 5 ? '2OT' : p === 6 ? '3OT' : p != null ? `P${p}` : '?'
+      if (t) return `${pLabel} ${t}`
       return h.time ?? h.t ?? fmtTimestamp(h.timestamp) ?? String(i)
     })
     const tiltVals = history.map(h => {
@@ -270,6 +280,7 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
             plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
             scales: {
               x: {
+                reverse: false,
                 grid: { display: false },
                 ticks: { font: { size: 9 }, color: '#9CA3AF', maxRotation: 30, maxTicksLimit: 8 },
               },
