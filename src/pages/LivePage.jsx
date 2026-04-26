@@ -309,7 +309,7 @@ export default function LivePage({ onNav }) {
           ) : (
             <div className="row3">
               {finalGames.map(g => (
-                <div key={g.game_id} className="lcard">
+                <div key={g.game_id} className="lcard" onClick={() => onNav('livedeep', g.game_id)} style={{ cursor: 'pointer' }}>
                   <div className="lc-top">
                     <span className="badge bf">Final</span>
                   </div>

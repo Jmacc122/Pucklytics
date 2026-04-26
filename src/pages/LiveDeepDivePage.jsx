@@ -148,6 +148,7 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
   const kmRef = useRef(null)
   const kmInst = useRef(null)
   const controllerRef = useRef(null)
+  const pollIdRef = useRef(null)
 
   // Poll game + tilt every 10 s, same pattern as LivePage
   useEffect(() => {
@@ -159,19 +160,28 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
       controllerRef.current = new AbortController()
       const { signal } = controllerRef.current
       const timeoutId = setTimeout(() => controllerRef.current?.abort(), 15000)
-      const tiltUrl = `${BASE}/games/${gameId}/tilt${tiltMode === 'full' ? '?full=true' : ''}`
+      const useFull = tiltMode === 'full'
+      const tiltUrl   = `${BASE}/games/${gameId}/tilt${useFull ? '?full=true' : ''}`
+      const eventsUrl = `${BASE}/games/${gameId}/events${useFull ? '?full=true' : ''}`
       try {
         const [gameRes, tiltRes, eventsRes] = await Promise.allSettled([
-          fetch(`${BASE}/games/${gameId}`,        { signal }).then(r => r.json()),
-          fetch(tiltUrl,                          { signal }).then(r => r.json()),
-          fetch(`${BASE}/games/${gameId}/events`, { signal }).then(r => r.json()),
+          fetch(`${BASE}/games/${gameId}`, { signal }).then(r => r.json()),
+          fetch(tiltUrl,                   { signal }).then(r => r.json()),
+          fetch(eventsUrl,                 { signal }).then(r => r.json()),
         ])
         if (!active || signal.aborted) return
+        const gameData = gameRes.status === 'fulfilled' ? gameRes.value : null
         setData({
-          game:   gameRes.status   === 'fulfilled' ? gameRes.value   : null,
+          game:   gameData,
           tilt:   tiltRes.status   === 'fulfilled' ? tiltRes.value   : null,
           events: eventsRes.status === 'fulfilled' ? eventsRes.value : null,
         })
+        // Stop polling once we confirm the game is final
+        const gs = gameData?.game_state
+        if ((gs === 'OFF' || gs === 'FINAL') && pollIdRef.current) {
+          clearInterval(pollIdRef.current)
+          pollIdRef.current = null
+        }
       } catch (_) {
         // ignore aborts and network errors; keep existing data on re-polls
       } finally {
@@ -180,14 +190,20 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
     }
 
     load().finally(() => { if (active) setLoading(false) })
-    const pollId = setInterval(load, 10000)
+    pollIdRef.current = setInterval(load, 10000)
 
     return () => {
       active = false
-      clearInterval(pollId)
+      if (pollIdRef.current) { clearInterval(pollIdRef.current); pollIdRef.current = null }
       controllerRef.current?.abort()
     }
   }, [gameId, tiltMode])
+
+  // Auto-switch to full-game view for final games (triggers one more fetch with ?full=true)
+  useEffect(() => {
+    const gs = data?.game?.game_state
+    if (gs === 'OFF' || gs === 'FINAL') setTiltMode('full')
+  }, [data?.game?.game_state])
 
   // Destroy charts on unmount only (not on every poll)
   useEffect(() => {
@@ -300,8 +316,9 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
   const g    = data?.game
   const tilt = data?.tilt
 
-  const status        = g ? mapGameState(g.game_state) : null
-  const isUpcoming    = status === 'upcoming'
+  const status         = g ? mapGameState(g.game_state) : null
+  const isUpcoming     = status === 'upcoming'
+  const isFinal        = status === 'final'
   const isIntermission = g?.time_remaining === 'Intermission'
 
   const homeAbbr = g?.home_team ?? 'HOME'
@@ -345,6 +362,7 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
     away:      teamName(awayAbbr),
     homeScore: isUpcoming ? null : g.home_score,
     awayScore: isUpcoming ? null : g.away_score,
+    status,
     period:    periodLabel(g.period),
     time:      g.time_remaining ?? '—',
     venue:     null,
@@ -486,18 +504,20 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
                 <div className="card ddv-chart-card">
                   <div className="ddv-chart-top">
                     <div className="ddv-chart-lbl">
-                      Rolling tilt · {tiltMode === 'full' ? 'full game' : 'last 10 min'}
+                      {isFinal ? 'Full game momentum' : `Rolling tilt · ${tiltMode === 'full' ? 'full game' : 'last 10 min'}`}
                     </div>
-                    <div className="tilt-mode-toggle">
-                      <button
-                        className={`tmt-btn ${tiltMode === 'recent' ? 'on' : ''}`}
-                        onClick={() => setTiltMode('recent')}
-                      >Last 10 min</button>
-                      <button
-                        className={`tmt-btn ${tiltMode === 'full' ? 'on' : ''}`}
-                        onClick={() => setTiltMode('full')}
-                      >Full game</button>
-                    </div>
+                    {!isFinal && (
+                      <div className="tilt-mode-toggle">
+                        <button
+                          className={`tmt-btn ${tiltMode === 'recent' ? 'on' : ''}`}
+                          onClick={() => setTiltMode('recent')}
+                        >Last 10 min</button>
+                        <button
+                          className={`tmt-btn ${tiltMode === 'full' ? 'on' : ''}`}
+                          onClick={() => setTiltMode('full')}
+                        >Full game</button>
+                      </div>
+                    )}
                   </div>
                   <div style={{ height: 130 }}><canvas ref={tiltRef}></canvas></div>
                   <div className="tilt-legend">
@@ -508,51 +528,59 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
                 </div>
               </div>
 
-              {/* RIGHT — Goalie Pull Risk (mock until endpoint exists) */}
+              {/* RIGHT — Goalie Pull Risk */}
               <div className="ddv-col">
                 <div className="section-label">Goalie pull risk · {awayAbbr}</div>
 
-                <div className="card">
-                  <div className="ddv-circ-row">
-                    <svg width="128" height="128" viewBox="0 0 120 120" style={{ flexShrink: 0 }}>
-                      <circle cx="60" cy="60" r={circR} fill="none" stroke="#FEE2E2" strokeWidth="10"/>
-                      <circle cx="60" cy="60" r={circR} fill="none" stroke="#DC2626" strokeWidth="10"
-                        strokeDasharray={`${circC} ${circC}`} strokeDashoffset={circOff}
-                        transform="rotate(-90 60 60)" strokeLinecap="round"/>
-                      <text x="60" y="54" textAnchor="middle" dominantBaseline="middle" fontSize="22" fontWeight="500" fill="#0D1117">{pullRisk}%</text>
-                      <text x="60" y="73" textAnchor="middle" fontSize="9" fill="#9CA3AF" letterSpacing="0.06em">PULL RISK</text>
-                    </svg>
-                    <div className="ddv-circ-info">
-                      <div className="ddv-pull-label" style={{ color: '#DC2626' }}>Very likely</div>
-                      <div className="ddv-pull-ctx">
-                        {awayAbbr} coaches pull with &gt;4 min left in 62% of similar situations — above league average.
+                {isFinal ? (
+                  <div className="empty-card ddv-final-placeholder">
+                    Available for live games only
+                  </div>
+                ) : (
+                  <>
+                    <div className="card">
+                      <div className="ddv-circ-row">
+                        <svg width="128" height="128" viewBox="0 0 120 120" style={{ flexShrink: 0 }}>
+                          <circle cx="60" cy="60" r={circR} fill="none" stroke="#FEE2E2" strokeWidth="10"/>
+                          <circle cx="60" cy="60" r={circR} fill="none" stroke="#DC2626" strokeWidth="10"
+                            strokeDasharray={`${circC} ${circC}`} strokeDashoffset={circOff}
+                            transform="rotate(-90 60 60)" strokeLinecap="round"/>
+                          <text x="60" y="54" textAnchor="middle" dominantBaseline="middle" fontSize="22" fontWeight="500" fill="#0D1117">{pullRisk}%</text>
+                          <text x="60" y="73" textAnchor="middle" fontSize="9" fill="#9CA3AF" letterSpacing="0.06em">PULL RISK</text>
+                        </svg>
+                        <div className="ddv-circ-info">
+                          <div className="ddv-pull-label" style={{ color: '#DC2626' }}>Very likely</div>
+                          <div className="ddv-pull-ctx">
+                            {awayAbbr} coaches pull with &gt;4 min left in 62% of similar situations — above league average.
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
 
-                <div className="ddv-metrics">
-                  <div className="ddv-metric">
-                    <div className="ddv-m-lbl">Pulled here</div>
-                    <div className="ddv-m-val red">21/34</div>
-                    <div className="ddv-m-sub">situations</div>
-                  </div>
-                  <div className="ddv-metric">
-                    <div className="ddv-m-lbl">Avg pull</div>
-                    <div className="ddv-m-val">4:08</div>
-                    <div className="ddv-m-sub">remaining</div>
-                  </div>
-                  <div className="ddv-metric">
-                    <div className="ddv-m-lbl">EN goal %</div>
-                    <div className="ddv-m-val">18%</div>
-                    <div className="ddv-m-sub">against</div>
-                  </div>
-                </div>
+                    <div className="ddv-metrics">
+                      <div className="ddv-metric">
+                        <div className="ddv-m-lbl">Pulled here</div>
+                        <div className="ddv-m-val red">21/34</div>
+                        <div className="ddv-m-sub">situations</div>
+                      </div>
+                      <div className="ddv-metric">
+                        <div className="ddv-m-lbl">Avg pull</div>
+                        <div className="ddv-m-val">4:08</div>
+                        <div className="ddv-m-sub">remaining</div>
+                      </div>
+                      <div className="ddv-metric">
+                        <div className="ddv-m-lbl">EN goal %</div>
+                        <div className="ddv-m-val">18%</div>
+                        <div className="ddv-m-sub">against</div>
+                      </div>
+                    </div>
 
-                <div className="card ddv-chart-card">
-                  <div className="ddv-chart-lbl">P(not yet pulled) — {awayAbbr} vs league avg</div>
-                  <div style={{ height: 148 }}><canvas ref={kmRef}></canvas></div>
-                </div>
+                    <div className="card ddv-chart-card">
+                      <div className="ddv-chart-lbl">P(not yet pulled) — {awayAbbr} vs league avg</div>
+                      <div style={{ height: 148 }}><canvas ref={kmRef}></canvas></div>
+                    </div>
+                  </>
+                )}
               </div>
 
             </div>

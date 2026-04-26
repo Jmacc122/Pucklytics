@@ -18,7 +18,11 @@ export default function LiveDeepDiveCard({ game }) {
         <div className="ddv-venue">{game.venue}</div>
       </div>
       <div className="ddv-hdr-right">
-        <span className="badge br">● {game.period} · {game.time}</span>
+        {game.status === 'final' ? (
+          <span className="badge bf">Final</span>
+        ) : (
+          <span className="badge br">● {game.period} · {game.time}</span>
+        )}
         {game.pp && <span className="badge by">PP {game.pp}</span>}
         {game.en && <span className="en-tag">● EN</span>}
       </div>
