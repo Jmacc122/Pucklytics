@@ -199,7 +199,7 @@ export default function LiveDeepDivePage({ onNav, gameId }) {
     if (!data?.game) return
     if (mapGameState(data.game.game_state) === 'upcoming') return
 
-    const history = data.tilt?.history ?? []
+    const history = (data.tilt?.history ?? []).slice().reverse()
     const tiltLabels = history.map((h, i) => {
       if (typeof h !== 'object') return String(i)
       if (h.period != null && h.time_remaining != null) return `P${h.period} ${h.time_remaining}`
