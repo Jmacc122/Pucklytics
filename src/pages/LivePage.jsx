@@ -123,23 +123,25 @@ function mapUpcomingGame(g) {
     game_id: g.game_id,
     home: teamName(g.home_team),
     away: teamName(g.away_team),
-    time: formatMT(g.start_time_utc),
+    time: g.start_time_utc ? formatMT(g.start_time_utc) : 'TBD',
     model: '—',
     edge: null,
   }
 }
 
 function mapFinalGame(g) {
+  const homeSog = g.home_sog ?? null
+  const awaySog = g.away_sog ?? null
   return {
     game_id: g.game_id,
     home: teamName(g.home_team),
-    homeSog: null,
+    homeSog,
     homeScore: g.home_score,
     away: teamName(g.away_team),
-    awaySog: null,
+    awaySog,
     awayScore: g.away_score,
-    totalShots: null,
-    enGoals: null,
+    totalShots: homeSog != null && awaySog != null ? homeSog + awaySog : null,
+    enGoals: g.en_goals ?? null,
   }
 }
 

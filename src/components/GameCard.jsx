@@ -4,6 +4,8 @@ export default function GameCard({ game }) {
       <div className="gtop">
         {game.status === 'live' ? (
           <span className="badge br">● {game.period} · {game.time}</span>
+        ) : game.status === 'final' ? (
+          <span className="badge bf">Final</span>
         ) : (
           <span className="badge bl">{game.time}</span>
         )}
@@ -33,18 +35,33 @@ export default function GameCard({ game }) {
       </div>
 
       <div className="gfoot">
-        <div>
-          <div className="gfl">Pull risk</div>
-          <div className={`gfv ${game.pullRiskLevel || ''}`}>
-            {game.pullRisk || '—'}
-          </div>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <div className="gfl">{game.edge ? 'Edge' : 'Win prob'}</div>
-          <div className={`gfv ${game.edge ? 'green' : game.featured ? 'blue' : ''}`}>
-            {game.edge || game.winProb}
-          </div>
-        </div>
+        {game.status === 'final' ? (
+          <>
+            <div>
+              <div className="gfl">Total shots</div>
+              <div className="gfv">{game.totalShots ?? '—'}</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div className="gfl">EN goals</div>
+              <div className="gfv">{game.enGoals ?? '—'}</div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <div className="gfl">Pull risk</div>
+              <div className={`gfv ${game.pullRiskLevel || ''}`}>
+                {game.pullRisk || '—'}
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div className="gfl">{game.edge ? 'Edge' : 'Win prob'}</div>
+              <div className={`gfv ${game.edge ? 'green' : game.featured ? 'blue' : ''}`}>
+                {game.edge || game.winProb || '—'}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

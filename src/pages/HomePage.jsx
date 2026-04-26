@@ -76,12 +76,14 @@ function mapToGameCard(g) {
     awayScore: isUpcoming ? null : g.away_score,
     status,
     period: isLive ? periodLabel(g.period) : null,
-    time: isLive ? g.time_remaining : isUpcoming ? formatMT(g.start_time_utc) : 'Final',
+    time: isLive ? g.time_remaining : isUpcoming ? (g.start_time_utc ? formatMT(g.start_time_utc) : 'TBD') : 'Final',
     strength: isLive ? formatStrength(g.strength) : null,
     pullRisk: null,
     pullRiskLevel: null,
     winProb: formatWinProb(g.win_probability, g.home_team, g.away_team),
     featured: isLive && homeLeading,
+    totalShots: !isLive && !isUpcoming && g.home_sog != null && g.away_sog != null ? g.home_sog + g.away_sog : null,
+    enGoals: !isLive && !isUpcoming ? (g.en_goals ?? null) : null,
   }
 }
 
